@@ -59,28 +59,61 @@
         return fecha.toISOString();
     }
 
-    // Función para obtener datos reales de la API
+
+    // Función para obtener datos reales de la API (Node.js) con selector de resolución
     async function obtenerDatosReales(fechaInicio, fechaFin, estacion) {
         try {
-            const formData = new FormData();
-            // Convertir las fechas locales a UTC antes de enviar
-            formData.append('fechainicial', convertirAUTC(fechaInicio));
-            formData.append('fechafinal', convertirAUTC(fechaFin));
-            formData.append('estacion', estacion);
+            // 1. Calcular la diferencia de días
+            const start = new Date(fechaInicio);
+            const end = new Date(fechaFin);
+            const diferenciaMilisegundos = end - start;
+            const diferenciaDias = diferenciaMilisegundos / (1000 * 60 * 60 * 24);
 
-            const response = await fetch('/lavnet-chile/api/radob-data', {
+            // 2. Lógica de Resolución 
+            let resolucion = 'crudo'; // Por defecto
+            if (diferenciaDias <= 3) {
+                resolucion = 'crudo';
+            } else if (diferenciaDias <= 30) {
+                resolucion = 'minuto';
+            } else {
+                resolucion = 'hora';
+            }
+
+            // 3. DEPURACIÓN: Mostrar en consola qué decidimos
+            console.log(`\n================================`);
+            console.log(`Analizando Petición...`);
+            console.log(`-> Días solicitados: ${diferenciaDias.toFixed(2)}`);
+            console.log(`-> Pidiendo a Node.js la tabla: ${resolucion.toUpperCase()}`);
+            console.log(`================================\n`);
+
+            const payload = {
+                fechainicial: convertirAUTC(fechaInicio),
+                fechafinal: convertirAUTC(fechaFin),
+                resolucion: resolucion // <--- Enviamos la decisión al backend
+            };
+
+            // Hacemos el fetch hacia Node.js
+            const response = await fetch('http://gipimo.ddns.net:3000/getUNACHEFMDate', {
                 method: 'POST',
-                body: formData
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
             });
 
             if (!response.ok) {
-                throw new Error('Error en la petición');
+                throw new Error(`Error en el servidor: ${response.status}`);
             }
 
             const data = await response.json();
+            
+            // Confirmación de recepción
+            console.log(`[FRONTEND - OPTIMIZACIÓN]  Recibidos ${data.length} registros del backend.`);
+            
             return data;
+
         } catch (error) {
-            console.error('Error al obtener datos:', error);
+            console.error('Error de conexión o código:', error);
             return null;
         }
     }
@@ -97,7 +130,6 @@
         data.forEach(item => {
             timestamps.push(new Date(item.datetime_utc));
             
-            // Leemos item.efm en lugar de item.amplitud
             // Si por algún error viene vacío, le ponemos null para que la gráfica no se rompa
             let valorEfm = item.efm !== undefined ? parseFloat(item.efm) : null;
             amplitudes.push(valorEfm);
@@ -232,7 +264,8 @@
     }
 
     // Crear configuración para gráfica separada (amplitud o fase)
-    function crearConfigSeparada(datos, estacion, tipo) {
+    // Crear configuración para gráfica separada (amplitud o fase)
+    function crearConfigSeparada(datos, estacion, tipo, diferenciaDias) {
         const isAmp = tipo === 'amplitud';
         const dataset = {
             label: isAmp ? 'Amplitud' : 'Fase',
@@ -243,6 +276,33 @@
             pointRadius: 0,
             tension: 0.3
         };
+
+        // --- LÓGICA PARA EL EJE X ---
+        let timeConfig = {
+            unit: 'hour',
+            displayFormats: { hour: 'HH:mm' }
+        };
+
+        if (diferenciaDias > 1 && diferenciaDias <= 3) {
+            timeConfig = {
+                unit: 'hour',
+                stepSize: 3, // Cada 3 horas
+                displayFormats: { hour: 'DD MMM, HH:mm' } // Ej: 25 Feb, 03:00
+            };
+        } else if (diferenciaDias > 3 && diferenciaDias <= 30) {
+            timeConfig = {
+                unit: 'day',
+                stepSize: 1, // Una escala por día
+                displayFormats: { day: 'DD MMM' } // Ej: 25 Feb
+            };
+        } else if (diferenciaDias > 30) {
+            timeConfig = {
+                unit: 'week',
+                stepSize: 1, // Por semana
+                displayFormats: { week: 'DD MMM YYYY' } // Ej: 25 Feb 2026 (Inicio de semana)
+            };
+        }
+        // --------------------------------------
 
         return {
             type: 'line',
@@ -259,8 +319,12 @@
                 scales: {
                     x: { 
                         type: 'time', 
-                        time: { unit: 'hour', displayFormats: { hour: 'HH:mm' } },
-                        grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                        time: timeConfig, // <--- Aplicamos la regla del profe aquí
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                        ticks: {
+                            maxRotation: 45, // Inclinamos el texto 45 grados para que no choque
+                            minRotation: 45
+                        }
                     },
                     y: {
                         title: { display: true, text: isAmp ? 'Amplitud' : 'Fase', color: isAmp ? '#2196F3' : '#F44336' },
@@ -272,7 +336,8 @@
                     tooltip: {
                         callbacks: {
                             title: (context) => {
-                                return moment(context[0].parsed.x).format('HH:mm');
+                                // Para que al pasar el mouse SIEMPRE veamos el detalle exacto
+                                return moment(context[0].parsed.x).format('DD/MM/YYYY HH:mm:ss');
                             }
                         }
                     }
@@ -323,6 +388,7 @@
     }
 
     // Función para actualizar las gráficas separadas
+    // Función para actualizar las gráficas separadas
     async function actualizarGraficaEstacion() {
         const estacion = document.getElementById('estacionSelect').value;
         const fechaInicio = document.getElementById('fechaInicio').value;
@@ -332,7 +398,12 @@
 
         ocultarMensaje();
 
-        // Obtener datos reales de la API
+        // 1. Calculamos los días aquí en el frontend para la gráfica
+        const start = new Date(fechaInicio);
+        const end = new Date(fechaFin);
+        const diferenciaDias = (end - start) / (1000 * 60 * 60 * 24);
+
+        // 2. Obtener datos reales de la API
         const datosAPI = await obtenerDatosReales(fechaInicio, fechaFin, estacion);
         
         if (!datosAPI) {
@@ -350,23 +421,23 @@
 
         destruirGrafica();
 
-        // Gráfica amplitud (separada)
+        // 3. Gráfica amplitud (separada)
         const canvasAmp = document.getElementById('chartAmp');
         if (canvasAmp) {
             const ctxAmp = canvasAmp.getContext('2d');
             chartAmp = new Chart(ctxAmp, crearConfigSeparada(
-                datos, estacion, 'amplitud'
+                datos, estacion, 'amplitud', diferenciaDias // <--- Le pasamos la diferencia de días
             ));
         }
 
-        // Gráfica fase (separada)
-        //const canvasFase = document.getElementById('chartFase');
-        //if (canvasFase) {
-            //const ctxFase = canvasFase.getContext('2d');
-            //chartFase = new Chart(ctxFase, crearConfigSeparada(
-                //datos, estacion, 'fase'
-            //));
-        //
+        // Gráfica fase (comentada temporalmente)
+        // const canvasFase = document.getElementById('chartFase');
+        // if (canvasFase) {
+        //     const ctxFase = canvasFase.getContext('2d');
+        //     chartFase = new Chart(ctxFase, crearConfigSeparada(
+        //         datos, estacion, 'fase', diferenciaDias
+        //     ));
+        // }
     }
 
     // Inicializar controles y gráfica cuando el DOM esté listo
