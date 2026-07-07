@@ -8,6 +8,7 @@ urlpatterns = [
     path('graficas/', views.graficas_page, name='graficas'),
     path('mapa-solar/', views.mapa_solar_page, name='mapa_solar'),
     path('descargar/', views.descargar_muestra, name='descargar'),
+    path('wwlln', views.wwlln_page, name='wwlln'),
     # API
     path('api/timeseries', views.api_timeseries, name='api_timeseries'),
     path('api/events', views.api_events, name='api_events'),

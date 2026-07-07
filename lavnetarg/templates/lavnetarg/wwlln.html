@@ -1,0 +1,33 @@
+{% extends 'lavnetarg/base.html' %}
+{% load static %}
+
+{% block title %}World Wide Lightning Location Network (WWLLN){% endblock %}
+
+{% block content %}
+<div class="container py-5 text-center">
+  <h2 class="section-title">WWLLN</h2>
+  <p class="card-text fw-bold">
+    La estación receptora LAVNet-Ar forma parte de la Red Mundial de Monitoreo de Descargas Eléctricas (World Wide Lightning Location Network (WWLLN)). Gestionado por la Universidad de Washington en Seattle y el grupo liderado por el Dr. Robert Holzworth.
+  </p>
+  <br/>
+  <div class="col-md-12">
+   <div class="img-wrapper h-100">
+    <img src="https://wwlln.net/global_stroke_map.png" alt="27210 lightning events" class="img-center" />
+   </div>
+  </div>
+  <br/>
+  <p class="card-text fw-bold">
+    El gráfico muestra las descargas eléctricas registrads a nivel mundial por la red World Wide Lightning Location Network (WWLLN) durante los últimos 40 minutos, con marcadores codificados por colores que indican las descargas que se han producido en los últimos 10 minutos; aparecen marcadores amarillos, naranjas, rojo anaranjados, rojos y granates para dichas descargas. Los puntos verdes corresponden a las estaciones receptoras.
+  </p>
+  <br/>
+  <p class="card-text fw-bold">
+   'The following plot shows the global lightning strokes from WWLLN during the last 40 minutes with color coded markers which indicate lightning occurring within the last 10 minutes, then <span style="color:yellow;">yellow</span>, <span style="color:orange;">orange</span>, <span style="color:orangered;">orange red</span>, <span style="color:red;">red</span>, and <span style="color:saddlebrown;">maroon</span> markers'
+  </p>
+  
+  (<a href="https://wwlln.net/">wwlln.net</a>)
+
+  <p><a class="btn btn-secondary" href="{% url 'lavnetarg:home' %}">Volver al inicio</a></p>
+</div>
+{% endblock %}
+
+{% block scripts %}{% endblock %}
