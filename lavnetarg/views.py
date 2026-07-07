@@ -45,6 +45,11 @@ def descargar_muestra(request):
 		'api_base_url': '/lavnet-arg/api',
 	})
 
+def wwlln_page(request):
+	return render(request, 'lavnetarg/wwlln.html', {
+		'site_title': 'LAVNet-Argentina - WWLLN',
+		'api_base_url': '/lavnet-arg/api',
+	})
 
 @require_GET
 def api_timeseries(request):
