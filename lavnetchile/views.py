@@ -7,6 +7,7 @@ import io
 from datetime import datetime, timezone
 from django.views.decorators.csrf import csrf_exempt
 import requests
+import json
 
 
 def home(request):
@@ -90,30 +91,37 @@ def api_export(request):
 def api_radob_data(request):
     """Proxy para obtener datos de Chile desde el servidor de Node.js del profe."""
     try:
-        fechainicial = request.POST.get('fechainicial')
-        fechafinal = request.POST.get('fechafinal')
+        # 1. Leemos el payload en formato JSON que envía el nuevo frontend
+        payload_frontend = json.loads(request.body)
+        
+        fechainicial = payload_frontend.get('fechainicial')
+        fechafinal = payload_frontend.get('fechafinal')
+        resolucion = payload_frontend.get('resolucion', 'crudo') # Capturamos tu nueva lógica
         
         if not fechainicial or not fechafinal:
             return JsonResponse({'error': 'Faltan parámetros de fecha'}, status=400)
         
-        # Endpoint específico para Chile (UNACH)
-        endpoint_profe = "http://idawis-uaz.ddns.net:3000/getUNACHEFMDate"
+        # 2. Apuntamos al servidor local de la Raspberry Pi por HTTP
+        endpoint_profe = "http://gipimo.ddns.net:3000/getUNACHEFMDate"
         
-        # Payload que espera el servidor de Node.js
+        # 3. Rearmamos el payload
         payload = {
             'fechainicial': fechainicial,
-            'fechafinal': fechafinal
+            'fechafinal': fechafinal,
+            'resolucion': resolucion
         }
         
-        # Hacemos la petición POST al servidor del profe
-        respuesta = requests.post(endpoint_profe, data=payload, timeout=20)
+        # 4. Hacemos la petición enviando el JSON (importante usar json= en lugar de data=)
+        respuesta = requests.post(endpoint_profe, json=payload, timeout=20)
         
         if respuesta.status_code != 200:
             return JsonResponse({'error': f'Error en servidor remoto: {respuesta.status_code}'}, status=502)
             
         datos = respuesta.json()
         return JsonResponse(datos, safe=False)
-            
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Formato de petición inválido'}, status=400)
     except requests.exceptions.RequestException as e:
         return JsonResponse({'error': f'No se pudo conectar al servidor del profe: {str(e)}'}, status=503)
     except Exception as e:

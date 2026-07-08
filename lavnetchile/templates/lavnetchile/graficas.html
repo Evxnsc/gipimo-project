@@ -92,8 +92,8 @@
                 resolucion: resolucion // <--- Enviamos la decisión al backend
             };
 
-            // Hacemos el fetch hacia Node.js
-            const response = await fetch('http://gipimo.ddns.net:3000/getUNACHEFMDate', {
+            // Hacemos el fetch hacia nuestro propio Proxy en Django
+            const response = await fetch('{% url "lavnetchile:api_radob_data" %}', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
